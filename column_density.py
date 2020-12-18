@@ -149,7 +149,7 @@ def makePlot(X, Y, data, cmap, mode, output_dir):
         plt.ylabel(readable("Z [kpc]"))
     else:
         plt.ylabel(readable("Y [kpc]"))
-    plt.savefig(output_dir + "column_density_"+ mode +".pdf")
+    plt.savefig(output_dir + "column_density_"+ mode +".pdf", bbox_inches='tight')
     plt.show()
     plt.close()
     plt.rcParams["font.size"] = 10
