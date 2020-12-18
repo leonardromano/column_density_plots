@@ -123,16 +123,15 @@ def densityDistribution(pos, hsml, density, mass, binNumber = 100, boxsize = 15.
             for k in range(binNumber):
                 if w_3d[i,j,k] != 0:
                     rho_3d[i,j,k] /= w_3d[i,j,k]
-    #computing LOS integral along y axis
+    #computing LOS integrals
     for i in range(binNumber):
         for j in range(binNumber):
             for k in range(binNumber):
-                rho_xz[k,i] += rho_3d[i,j,k] * dr
-    #computing LOS integral along z axis
-    for i in range(binNumber):
-        for j in range(binNumber):
-            for k in range(binNumber):
-                rho_xy[j,i] += rho_3d[i,j,k] * dr
+                rho_xz[k,i] += rho_3d[i,j,k]
+                rho_xy[j,i] += rho_3d[i,j,k]
+    rho_xz *= dr
+    rho_xy *= dr
+    
     t1 = time()
     print("finished calculating the spatial density!\nTook %g seconds" %(t1-t0))
     return rho_xz, rho_xy
