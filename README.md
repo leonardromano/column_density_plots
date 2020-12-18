@@ -5,7 +5,7 @@ A script for making column density plots
 The script is self contained and meant to be imported in your analysis code. 
 The main routine for making column density plots is smoothColumnDensityPlot so probably an import like
 
-"from column_density_plots import smoothColumnDensityPlot"
+"from column_density import smoothColumnDensityPlot"
 
 in the right spot will be sufficient.
 
