@@ -11,18 +11,18 @@ from time import time
 #global variables
 #proton mass
 mp = 1.672621637*10**(-24)
+TINY_NUMBER = 1e-20
 #################################
 
 
 #This function can be replaced with your SPH Kernel function of choice
-def W(r, h):
+def W(q, h):
     "cubic B4-spline"
-    a = r/h
-    if 0. <=a<=0.5:
-        return (1.-6.*a**2+6.*a**3)/(np.pi*h**3)
-    elif 0.5 <= a <= 1.:
-        return (2.*(1.-a)**3)* 8/(np.pi*h**3)
-    elif 1.<a:
+    if 0. <=q<=0.5:
+        return (1.-6.*q**2+6.*q**3)/(np.pi*h**3)
+    elif 0.5 <= q <= 1.:
+        return (2.*(1.-q)**3)* 8/(np.pi*h**3)
+    elif 1.<q:
         return 0.
 
 def readable(label):
@@ -71,12 +71,9 @@ def densityDistribution(pos, hsml, density, mass, binNumber = 100, boxsize = 15.
         boundsk = [int((boxsize + pt[2] - hsml[l])/dr -0.5 - 2.), \
                    int((boxsize + pt[2] + hsml[l])/dr -0.5 + 2.)]
         #if particle reaches out of box: cut off
-        if boundsi[0] < 0:
-            boundsi[0] = 0
-        if boundsj[0] < 0:
-            boundsj[0] = 0
-        if boundsk[0] < 0:
-            boundsk[0] = 0
+        boundsi[0] = max(0, boundsi[0])
+        boundsj[0] = max(0, boundsj[0])
+        boundsk[0] = max(0, boundsk[0])
         #if lower bound out of box: discard particle
         if boundsi[0] >= binNumber:
             l+=1
@@ -88,12 +85,9 @@ def densityDistribution(pos, hsml, density, mass, binNumber = 100, boxsize = 15.
             l+=1
             continue
         #if particle reaches out of box: cut off
-        if boundsi[1] > binNumber:
-            boundsi[1] = binNumber
-        if boundsj[1] > binNumber:
-            boundsj[1] = binNumber
-        if boundsk[1] > binNumber:
-            boundsk[1] = binNumber
+        boundsi[1] = min(binNumber, boundsi[1])
+        boundsj[1] = min(binNumber, boundsj[1])
+        boundsk[1] = min(binNumber, boundsk[1])
         #if upper bound out of box: discard particle
         if boundsi[1] <= 0:
             l+=1
@@ -108,21 +102,21 @@ def densityDistribution(pos, hsml, density, mass, binNumber = 100, boxsize = 15.
         for i in range(boundsi[0], boundsi[1]):
             for j in range(boundsj[0], boundsj[1]):
                 for k in range(boundsk[0], boundsk[1]):
-                    ds = np.linalg.norm(np.array([-boxsize + dr*(i+0.5) - pt[0], \
-                                                  -boxsize + dr*(j+0.5) - pt[1], \
-                                                  -boxsize + dr*(k+0.5) - pt[2]]))
+                    dx = dr * (i + 0.5) - pt[0] - boxsize
+                    dy = dr * (j + 0.5) - pt[1] - boxsize
+                    dz = dr * (k + 0.5) - pt[2] - boxsize
+                    q = np.sqrt(dx**2 + dy**2 + dz**2)/hsml[l]
+                    if q > 1:
+                        continue
                     #add particles contribution to SPH density estimate 
                     #in cell (i,j,k) in units of mp/hsml³
-                    rho_3d[i,j,k] += mass[l]*W(ds, hsml[l])/mp
+                    mlwk = mass[l] * W(q, hsml[l])
+                    rho_3d[i,j,k] += mlwk/mp
                     #add particles contribution to volume element weight in cell
-                    w_3d[i,j,k] += (mass[l]/density[l])*W(ds, hsml[l])
+                    w_3d[i,j,k] += mlwk/density[l]
         l+=1
     #now loop over all cells weighting densities
-    for i in range(binNumber):
-        for j in range(binNumber):
-            for k in range(binNumber):
-                if w_3d[i,j,k] != 0:
-                    rho_3d[i,j,k] /= w_3d[i,j,k]
+    rho_3d /= (w_3d + TINY_NUMBER)
     #computing LOS integrals
     for i in range(binNumber):
         for j in range(binNumber):
