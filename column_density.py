@@ -118,11 +118,7 @@ class Density_data():
                     #add particles contribution to volume element weight in cell
                     self.w_3d[i,j,k] += mlwk/p.Density
                     
-    def process_particles(self, part_ref, i, n):
-        if i == NCPU-1:
-            particles = part_ref[i * n :]
-        else:
-            particles = part_ref[i * n : (i + 1) * n]
+    def process_particles(self, particles):
         for particle in particles:
             self.update(particle)
         return self.rho_3d, self.w_3d
@@ -159,18 +155,16 @@ def densityDistribution(particles, binNumber = 100, boxsize = 15):
     rho_xz = zeros((binNumber,binNumber))
     rho_xy = zeros((binNumber,binNumber))
     
-    #store particles in shared memory
-    part_ref = ray.put(particles)
-    
     t0 = time()
     print("calculating spatial density...\n")
     #first loop over all particles to compute densities and weights
     #spread the work evenly among all processors
     n = len(particles)//NCPU
-    result_ids = [actors[i].process_particles.remote(part_ref, i, n) \
+    result_ids = [actors[i].process_particles.remote(particles[i * n : (i + 1) * n]) \
                   for i in range(NCPU-1)]
         
-    result_ids.append(actors[NCPU-1].process_particles.remote(part_ref, NCPU-1, n))
+    result_ids.append(actors[NCPU-1].process_particles.\
+                      remote(particles[(NCPU-1) * n :]))
     #now combine the contributions from all processors
     while len(result_ids):
         done_id, result_ids = ray.wait(result_ids)
