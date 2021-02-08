@@ -48,11 +48,7 @@ def W(q, h):
 
 @ray.remote
 class worker():
-    def __init__(self, particles_ref, ID, load, binNumber, boxsize):
-        if ID < NCPU-1:
-            self.particles = particles_ref[ID * load:(ID+1) * load]
-        else:
-            self.particles = particles_ref[ID * load:]
+    def __init__(self, binNumber, boxsize):
         self.binNumber = binNumber
         self.boxsize = boxsize
         self.dr = 2 * boxsize / binNumber
@@ -110,8 +106,8 @@ class worker():
                     #add particles contribution to volume element weight in cell
                     self.w_3d[i,j,k] += mlwk/p.Density
                     
-    def process(self):
-        for particle in self.particles:
+    def process(self, particles):
+        for particle in particles:
             self.update(particle)
         return self.rho_3d, self.w_3d
 
@@ -155,12 +151,9 @@ def smoothColumnDensityPlot(positions, smoothingLengths, densities, masses, \
     #first compute column densities
     ray.init(num_cpus = NCPU)
     print("Making column density plot using %d processor cores."%NCPU)
-    Npart = smoothingLengths.shape[0]
-    particles_ref = ray.put(array([Particle(positions[i], smoothingLengths[i], \
-                                        densities[i], masses[i]) \
-                               for i in range(positions.shape[0])]))
-    density_xz, density_xy = densityDistribution(particles_ref, Npart, \
-                                                 Nbins, boxlength)
+    Particles =array([Particle(positions[i], smoothingLengths[i], densities[i], \
+                               masses[i]) for i in range(positions.shape[0])])
+    density_xz, density_xy = densityDistribution(Particles, Nbins, boxlength)
     ray.shutdown()
     #create grid
     XX = linspace(-boxlength, boxlength, Nbins)
@@ -176,7 +169,7 @@ def smoothColumnDensityPlot(positions, smoothingLengths, densities, masses, \
 ###############################################################################
 # Function for density computation
 
-def densityDistribution(particles_ref, Npart, binNumber = 100, boxsize = 15):
+def densityDistribution(Particles, binNumber = 100, boxsize = 15):
     """calculates the column density including the smoothing length
     for gas particles"""
     
@@ -185,11 +178,13 @@ def densityDistribution(particles_ref, Npart, binNumber = 100, boxsize = 15):
     
     #first loop over all particles computing densities and weights
     #spread the work evenly among all processors
-    load = Npart//NCPU
-    actors = [worker.remote(particles_ref, i, load, binNumber, boxsize) \
-              for i in range(NCPU)]
+    load = Particles.shape[0]//NCPU
     
-    result_ids = [actor.process.remote() for actor in actors]
+    actors = [worker.remote(binNumber, boxsize) for _ in range(NCPU)]
+    
+    result_ids = [actors[i].process.remote(Particles[i * load:(i+1) * load]) \
+                  for i in range(NCPU-1)]
+    result_ids.append(actors[NCPU-1].process.remote(Particles[(NCPU-1) * load:]))
     
     #now reduce the individual results
     rho_3d = zeros((binNumber,binNumber,binNumber))
